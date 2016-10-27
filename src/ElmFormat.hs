@@ -13,6 +13,7 @@ import ElmVersion
 import ElmFormat.FileStore (FileStore)
 import ElmFormat.Operation (Operation)
 
+import qualified AST.Json
 import qualified AST.Module
 import qualified Flags
 import qualified Data.ByteString as ByteString
@@ -29,6 +30,7 @@ import qualified ElmFormat.Operation as Operation
 import qualified ElmFormat.Version
 import qualified Reporting.Error.Syntax as Syntax
 import qualified Reporting.Result as Result
+import qualified Text.JSON
 
 
 -- If elm-format was successful and formatted result differ
@@ -76,6 +78,9 @@ writeResult elmVersion destination inputFile inputText result =
                                 >> return Nothing
                             else
                                 return Nothing
+
+                    ToJson ->
+                        error "Internal error: ToJson should not get passed to writeResult"
 
         Result.Result _ (Result.Err errs) ->
             onInfo (ParseError inputFile (Text.unpack inputText) errs)
@@ -207,6 +212,8 @@ data WhatToDo
     | FormatInPlace FilePath [FilePath]
     | StdinToStdout
     | Validate Source
+    | FileToJson FilePath
+    | StdinToJson
 
 
 data Source
@@ -218,6 +225,7 @@ data Destination
     = ValidateOnly
     | UpdateInPlace
     | ToFile FilePath
+    | ToJson
 
 
 determineSource :: Bool -> [FilePath] -> Either ErrorMessage Source
@@ -229,13 +237,15 @@ determineSource stdin inputFiles =
         ( True, _:_ ) -> Left TooManyInputs
 
 
-determineDestination :: Maybe FilePath -> Bool -> Either ErrorMessage Destination
-determineDestination output validate =
-    case ( output, validate ) of
-        ( Nothing, True ) -> Right ValidateOnly
-        ( Nothing, False ) -> Right UpdateInPlace
-        ( Just path, False ) -> Right $ ToFile path
-        ( Just _, True ) -> Left OutputAndValidate
+determineDestination :: Maybe FilePath -> Bool -> Bool -> Either ErrorMessage Destination
+determineDestination output validate json =
+    case ( output, validate, json ) of
+        ( _, True, True ) -> Left OutputAndValidate
+        ( Nothing, True, False ) -> Right ValidateOnly
+        ( Nothing, False, False ) -> Right UpdateInPlace
+        ( Just path, False, False ) -> Right $ ToFile path
+        ( Just _, True, _ ) -> Left OutputAndValidate
+        ( _, False, True ) -> Right ToJson
 
 
 determineWhatToDo :: Source -> Destination -> Either ErrorMessage WhatToDo
@@ -243,17 +253,20 @@ determineWhatToDo source destination =
     case ( source, destination ) of
         ( _, ValidateOnly ) -> Right $ Validate source
         ( Stdin, UpdateInPlace ) -> Right StdinToStdout
+        ( Stdin, ToJson ) -> Right StdinToJson
         ( Stdin, ToFile output ) -> Right $ StdinToFile output
         ( FromFiles first [], ToFile output ) -> Right $ FormatToFile first output
         ( FromFiles first rest, UpdateInPlace ) -> Right $ FormatInPlace first rest
         ( FromFiles _ _, ToFile _ ) -> Left SingleOutputWithMultipleInputs
+        ( FromFiles first [], ToJson ) -> Right $ FileToJson first
+        ( FromFiles _ _, ToJson ) -> Left SingleOutputWithMultipleInputs
 
 
 determineWhatToDoFromConfig :: Flags.Config -> Either ErrorMessage WhatToDo
 determineWhatToDoFromConfig config =
     do
         source <- determineSource (Flags._stdin config) (Flags._input config)
-        destination <- determineDestination (Flags._output config) (Flags._validate config)
+        destination <- determineDestination (Flags._output config) (Flags._validate config) (Flags._json config)
         determineWhatToDo source destination
 
 
@@ -388,6 +401,36 @@ main defaultVersion =
                     case result of
                         Just False ->
                             exitFailure
-
                         _ ->
                             exitSuccess
+
+            (Right elmVersion, Right (StdinToJson)) ->
+                do
+                    input <- Lazy.getContents
+
+                    let result = Lazy.toStrict input
+                            |> Text.decodeUtf8
+                            |> Parse.parse
+
+                    case result of
+                        Result.Result _ (Result.Ok ast) ->
+                            (putStr $ Text.JSON.encode $ AST.Json.showJSON ast)
+                            >> (return ())
+
+                        Result.Result _ (Result.Err _) ->
+                            error "TODO: handle errors in JSON output"
+
+            (Right elmVersion, Right (FileToJson path)) ->
+                do
+                    input <- fmap Text.decodeUtf8 $ ByteString.readFile path
+
+                    let result = input
+                            |> Parse.parse
+
+                    case result of
+                        Result.Result _ (Result.Ok ast) ->
+                            (putStr $ Text.JSON.encode $ AST.Json.showJSON ast)
+                            >> (return ())
+
+                        Result.Result _ (Result.Err _) ->
+                            error "TODO: handle errors in JSON output"
