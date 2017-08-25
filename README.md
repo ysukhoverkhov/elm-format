@@ -1,6 +1,11 @@
 [![Build Status](https://travis-ci.org/avh4/elm-format.svg?branch=master)](https://travis-ci.org/avh4/elm-format)
 [![latest version: 0.7.0-exp](https://img.shields.io/badge/version-0.7.0--exp-orange.svg)](https://github.com/avh4/elm-format/releases/tag/0.7.0-exp)
 
+# 2 spaces indentation
+
+This for introduces the only change - intendation with 2 speces.
+
+
 # elm-format
 
 > `elm-format` is still in alpha.  If you run into any problems, please [report them](https://github.com/avh4/elm-format/issues).
