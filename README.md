@@ -3,7 +3,7 @@
 
 # 2 spaces indentation
 
-This for introduces the only change - intendation with 2 speces.
+This fork introduces the only change - intendation with 2 speces.
 
 
 # elm-format
