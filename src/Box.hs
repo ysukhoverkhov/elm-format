@@ -16,7 +16,7 @@ import qualified Data.Text as T
 A line is ALWAYS just one line.
 
 Space is self-explanatory,
-  Tab aligns to the nearest multiple of 4 spaces,
+  Tab aligns to the nearest multiple of 2 spaces,
   Text brings any string into the data structure,
   Row joins more of these elements onto one line.
 -}
@@ -246,7 +246,7 @@ initRow startColumn =
 
 spacesInTab :: Int
 spacesInTab =
-  4
+  2
 
 
 spacesToNextTab :: Int -> Int
